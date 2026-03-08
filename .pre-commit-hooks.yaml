@@ -1,0 +1,6 @@
+- id: ailint
+  name: AI-Lint — LLM code safety checks
+  language: python
+  entry: ailint check
+  types: [python]
+  pass_filenames: true
