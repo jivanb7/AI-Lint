@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import OrderedDict
 
 from ailint.models import Finding, Severity
@@ -66,7 +67,7 @@ class SARIFReporter(BaseReporter):
                                 {
                                     "physicalLocation": {
                                         "artifactLocation": {
-                                            "uri": f.location.file,
+                                            "uri": os.path.relpath(f.location.file),
                                             "uriBaseId": "%SRCROOT%",
                                         },
                                         "region": {

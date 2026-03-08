@@ -11,13 +11,15 @@ from ailint.rules.base import BaseRule
 from ailint.visitor import get_source_line
 
 # Patterns for known API key formats.
+# Note: many real API keys contain hyphens in the body (e.g. sk-ant-api03-XXX,
+# sk-proj-XXX), so character classes include hyphens and underscores.
 _KEY_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^sk-[A-Za-z0-9]{20,}"),         # OpenAI
-    re.compile(r"^sk-ant-[A-Za-z0-9]{20,}"),      # Anthropic
-    re.compile(r"^Bearer\s+[A-Za-z0-9._\-]{20,}"),  # Bearer tokens
-    re.compile(r"^xai-[A-Za-z0-9]{20,}"),         # xAI
-    re.compile(r"^gsk_[A-Za-z0-9]{20,}"),         # Groq
-    re.compile(r"^key-[A-Za-z0-9]{20,}"),         # Generic
+    re.compile(r"^sk-[A-Za-z0-9_\-]{20,}"),         # OpenAI (sk-XXX or sk-proj-XXX)
+    re.compile(r"^sk-ant-[A-Za-z0-9_\-]{20,}"),      # Anthropic (sk-ant-api03-XXX)
+    re.compile(r"^Bearer\s+[A-Za-z0-9._\-]{20,}"),   # Bearer tokens
+    re.compile(r"^xai-[A-Za-z0-9_\-]{20,}"),         # xAI
+    re.compile(r"^gsk_[A-Za-z0-9_\-]{20,}"),         # Groq
+    re.compile(r"^key-[A-Za-z0-9_\-]{20,}"),         # Generic
 ]
 
 # Variable names that suggest API key storage.
@@ -82,9 +84,16 @@ class ExposedAPIKeyRule(BaseRule):
         return any(p.match(value) for p in _KEY_PATTERNS)
 
     def _is_secret_assignment(self, value: str, parent: ast.AST | None) -> bool:
-        if not isinstance(parent, ast.Assign) or not _LONG_KEY_PATTERN.match(value):
+        if not _LONG_KEY_PATTERN.match(value):
             return False
-        for target in parent.targets:
+        # ast.Assign: e.g.  api_key = "sk-..."
+        if isinstance(parent, ast.Assign):
+            for target in parent.targets:
+                if isinstance(target, ast.Name) and target.id.lower() in _SECRET_VAR_NAMES:
+                    return True
+        # ast.AnnAssign: e.g.  api_key: str = "sk-..."
+        if isinstance(parent, ast.AnnAssign):
+            target = parent.target
             if isinstance(target, ast.Name) and target.id.lower() in _SECRET_VAR_NAMES:
                 return True
         return False

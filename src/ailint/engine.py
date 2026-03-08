@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+import warnings
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -13,8 +14,9 @@ from ailint.registry import RuleRegistry
 from ailint.visitor import annotate_parents
 
 # Pattern for inline ignore comments: # ailint: ignore  or  # ailint: ignore[AIL001,AIL002]
+# Character class is bounded to {1,200} to prevent ReDoS on crafted input.
 _IGNORE_PATTERN = re.compile(
-    r"#\s*ailint:\s*ignore(?:\[([A-Z0-9,\s]+)\])?", re.IGNORECASE
+    r"#\s*ailint:\s*ignore(?:\[([A-Z0-9, \t]{1,200})\])?", re.IGNORECASE
 )
 
 
@@ -44,13 +46,19 @@ class AnalysisEngine:
             min_severity=min_severity,
         )
 
+        # Wire config values into rules that declare configurable thresholds.
+        # NoStreamingRule (AIL012) accepts a threshold via its .threshold attribute.
+        for rule in rules:
+            if hasattr(rule, "threshold"):
+                rule.threshold = self.config.max_tokens_threshold
+
         for file_path in files:
-            findings = self._analyze_file(str(file_path), rules)
+            findings = self.analyze_file(str(file_path), rules)
             all_findings.extend(findings)
 
         return all_findings, len(files)
 
-    def _analyze_file(
+    def analyze_file(
         self, file_path: str, rules: list
     ) -> list[Finding]:
         """Parse and analyze a single file."""
@@ -61,7 +69,7 @@ class AnalysisEngine:
 
         try:
             tree = ast.parse(source, filename=file_path)
-        except SyntaxError:
+        except (SyntaxError, RecursionError, MemoryError):
             return []
 
         source_lines = source.splitlines()
@@ -75,8 +83,12 @@ class AnalysisEngine:
             try:
                 rule_findings = rule.check(tree, source_lines, file_path)
                 findings.extend(rule_findings)
-            except Exception:
+            except Exception as exc:
                 # A rule failure should not crash the entire analysis.
+                warnings.warn(
+                    f"Rule {rule.rule_id} failed on {file_path}: {exc}",
+                    stacklevel=2,
+                )
                 continue
 
         # Apply inline ignore comments
@@ -94,7 +106,16 @@ class AnalysisEngine:
                 if not self._is_excluded(path):
                     files.append(path)
             elif path.is_dir():
+                root = path
                 for py_file in sorted(path.rglob("*.py")):
+                    # Resolve the file to catch symlinks; reject any path that
+                    # escapes the requested root directory (symlink traversal guard).
+                    try:
+                        resolved = py_file.resolve()
+                        resolved.relative_to(root)
+                    except ValueError:
+                        # Path resolves outside of root — skip it.
+                        continue
                     if not self._is_excluded(py_file):
                         files.append(py_file)
 

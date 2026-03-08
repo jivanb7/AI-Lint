@@ -86,8 +86,23 @@ def load_config(
     return AilintConfig.from_dict(file_config)
 
 
+def _is_project_root(directory: Path) -> bool:
+    """Return True if this directory is a project root boundary.
+
+    A directory is considered a root if it contains a .git directory or a
+    pyproject.toml file.  Discovery stops after inspecting such a directory so
+    that config files from unrelated parent projects are never picked up.
+    """
+    return (directory / ".git").exists() or (directory / "pyproject.toml").exists()
+
+
 def _discover_config() -> dict[str, Any]:
-    """Walk up from cwd looking for pyproject.toml or .ailint.yaml."""
+    """Walk up from cwd looking for pyproject.toml or .ailint.yaml.
+
+    Discovery stops at the first git root (.git directory) or at a
+    pyproject.toml boundary, whichever comes first.  This prevents
+    accidentally reading config files from unrelated parent projects.
+    """
     current = Path.cwd()
     for directory in [current, *current.parents]:
         pyproject = directory / "pyproject.toml"
@@ -95,6 +110,8 @@ def _discover_config() -> dict[str, Any]:
             config = _load_pyproject(pyproject)
             if config:
                 return config
+            # pyproject.toml exists but has no [tool.ailint] — still a root boundary.
+            return {}
 
         ailint_yaml = directory / ".ailint.yaml"
         if ailint_yaml.exists():
@@ -103,6 +120,10 @@ def _discover_config() -> dict[str, Any]:
         ailint_yml = directory / ".ailint.yml"
         if ailint_yml.exists():
             return _load_yaml(ailint_yml)
+
+        # Stop at git root even when no config file was found there.
+        if (directory / ".git").exists():
+            return {}
 
     return {}
 
