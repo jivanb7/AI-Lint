@@ -181,7 +181,7 @@ jobs:
           python-version: "3.11"
       - run: pip install ailint
       - run: ailint check src/ --format sarif > results.sarif
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: results.sarif
