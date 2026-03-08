@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -106,8 +107,6 @@ def list_rules(output_format: str) -> None:
     rules = registry.list_rules()
 
     if output_format == "json":
-        import json
-
         data = [
             {
                 "rule_id": r.rule_id,

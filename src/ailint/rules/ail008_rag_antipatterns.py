@@ -133,7 +133,6 @@ class RAGAntiPatternRule(BaseRule):
 
     def _has_score_filtering(self, tree: ast.AST, call_node: ast.Call) -> bool:
         """Check if there's score filtering logic in the module."""
-        source = ast.dump(tree)
         # Look for score-related comparisons
         for node in ast.walk(tree):
             if isinstance(node, ast.Compare):

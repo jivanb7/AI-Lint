@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -23,8 +22,8 @@ class Location(BaseModel):
     file: str
     line: int
     col: int
-    end_line: Optional[int] = None
-    end_col: Optional[int] = None
+    end_line: int | None = None
+    end_col: int | None = None
 
 
 class Finding(BaseModel):
@@ -35,8 +34,8 @@ class Finding(BaseModel):
     severity: Severity
     message: str
     location: Location
-    fix_suggestion: Optional[str] = None
-    source_line: Optional[str] = None
+    fix_suggestion: str | None = None
+    source_line: str | None = None
 
 
 class RuleMetadata(BaseModel):
